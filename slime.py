@@ -7,8 +7,9 @@ import datetime
 import math
 import numpy as np
 
-class Slime:
 
+class Slime:
+    # 用法·检查文件完整性
     def Check_integrity(self):
         # 文件列表
         required_files = {
@@ -36,6 +37,7 @@ class Slime:
             print(f">- 姆姆~[史莱姆的灵魂正在完整地跳跃awa~]")
             return True
 
+    # 用法·开启对话
     def Start_chat(self):
 
         print("=" * 30)
@@ -50,8 +52,14 @@ class Slime:
                 print("咕？")
                 continue
 
-            self.analyse_user_input(user_text)
+            # 现在 analyse_user_input 返回两个值
+            user_chars, emotion_matrix = self.analyse_user_input(user_text)
 
+            # 可选：显示情绪矩阵（调试用）
+            if any(value > 0 for value in emotion_matrix.values()):
+                print(f"   情绪变化: {emotion_matrix}")
+
+    # 用法·打招呼
     def Meet(self, user_text=""):
         # 文件读取
         with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
@@ -80,19 +88,12 @@ class Slime:
         is_meet_command = "/meet" in user_text
 
         time_keywords = {
-            "morning": (
-                meet_keyword_groups[0] if len(meet_keyword_groups) > 0 else []
-            ),  # 早上关键词
-            "noon": (
-                meet_keyword_groups[1] if len(meet_keyword_groups) > 1 else []
-            ),  # 中午关键词
+            "morning": (meet_keyword_groups[0] if len(meet_keyword_groups) > 0 else []),
+            "noon": (meet_keyword_groups[1] if len(meet_keyword_groups) > 1 else []),
             "afternoon": (
                 meet_keyword_groups[2] if len(meet_keyword_groups) > 2 else []
-            ),  # 下午关键词
-            "evening": (
-                meet_keyword_groups[3] if len(meet_keyword_groups) > 3 else []
-            ),  # 晚上关键词
-            # meet_keyword_groups[4] 是 "/meet"，跳过
+            ),
+            "evening": (meet_keyword_groups[3] if len(meet_keyword_groups) > 3 else []),
         }
 
         current_time_segment = None
@@ -105,19 +106,17 @@ class Slime:
         elif 19 <= current_hour <= 22:
             current_time_segment = "evening"
         else:
-            current_time_segment = "midnight"  # 深夜没有特定关键词
+            current_time_segment = "midnight"
 
         if not is_meet_command:
             time_correct = True
             if current_time_segment != "midnight":
-                # 检查用户输入是否包含当前时段的关键词
                 has_correct_keyword = False
                 for keyword in time_keywords[current_time_segment]:
                     if keyword in user_text:
                         has_correct_keyword = True
                         break
 
-                # 检查用户输入是否包含其他时段的错误关键词
                 has_wrong_keyword = False
                 for segment, keywords in time_keywords.items():
                     if segment != current_time_segment and segment != "midnight":
@@ -128,11 +127,9 @@ class Slime:
                         if has_wrong_keyword:
                             break
 
-                # 如果有错误关键词或者没有正确关键词，时间不正确
                 if has_wrong_keyword or not has_correct_keyword:
                     time_correct = False
 
-            # 如果时间不符合
             if not time_correct:
                 text_keys = list(wrong_texts.keys())
                 selected_key = random.choices(text_keys, weights=weights[5])[0]
@@ -203,7 +200,7 @@ class Slime:
                 else:
                     weights[3][i] += random.randint(6, 12)
 
-        else:  # midnight
+        else:
             text_keys = list(midnight_texts.keys())
             selected_key = random.choices(text_keys, weights=weights[4])[0]
             output = midnight_texts[selected_key]
@@ -222,6 +219,7 @@ class Slime:
             json.dump(_Vocab, file, ensure_ascii=False, indent=4)
         return output
 
+    # 用法·戳戳
     def Click(self):
         # 文件读取
         with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
@@ -287,6 +285,7 @@ class Slime:
 
         return output
 
+    # 用法·退出对话
     def Quit(self):
         # 文件读取
         with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
@@ -318,18 +317,24 @@ class Slime:
 
         return output
 
+    # 用法·分析对话
     def analyse_user_input(self, user_text):
+        # 读取文件
         with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
             _Vocab = json.load(file)
         _Input = _Vocab["input"]
 
-        positive = 0
-        negative = 0
+        # 分析情绪
+        emotion_scores = self.analyze_emotion_simple(user_text)
+
+        # 更新史莱姆情绪数据
+        self.update_slime_emotions(emotion_scores)
+
+        # 分析
         slime_response = ""
         triggered_actions = set()
         should_quit = False
 
-        # 收集触发动作
         for action_type, keyword_groups in _Input["key_words"].items():
             all_keywords = []
             for group in keyword_groups:
@@ -343,7 +348,6 @@ class Slime:
                     triggered_actions.add(action_type)
                     break
 
-        # 按优先级执行所有动作（分多行输出）
         if triggered_actions:
             action_priority = {"Meet": 1, "Click": 2, "Quit": 3}
             sorted_actions = sorted(
@@ -362,68 +366,35 @@ class Slime:
                         response = method()
 
                     if response:
-                        # 每个动作单独输出一行
                         print(f">- {response}")
                         responses.append(response)
 
-                    # 设置退出标志
                     if action_type == "Quit":
                         should_quit = True
                 else:
                     print(f">- 警告: 未找到方法 {action_type}")
 
-            # 保存时合并所有回应
             if responses:
                 slime_response = " ".join(responses)
-
-        # 情感分析
-        for char in user_text:
-            if char in _Input["positive"]:
-                positive += 1
-            elif char in _Input["negative"]:
-                negative += 1
-
-        # 如果没有触发动作，给出情感反应
-        if not triggered_actions:
-            if positive > negative:
-                positive_responses = [
-                    "+",
-                    "开心地晃动~",
-                    "噗噜噗噜~",
-                    "发出快乐的光芒",
-                    "姆姆！好高兴",
-                    "变成亮绿色~",
-                ]
-                slime_response = random.choice(positive_responses)
-            elif negative > positive:
-                negative_responses = [
-                    "-",
-                    "缩成一团...",
-                    "变成深蓝色",
-                    "咕…不开心",
-                    "发出低落的光芒",
-                    "姆…有点难过",
-                ]
-                slime_response = random.choice(negative_responses)
-            else:
-                neutral_responses = [
-                    "咕？",
-                    "歪着头看着你",
-                    "发出好奇的光芒",
-                    "噗噜？",
-                    "姆~？",
-                    "轻轻晃动",
-                ]
-                slime_response = random.choice(neutral_responses)
+        else:
+            # 没有触发动作时，根据情绪生成回应
+            slime_response = self.generate_emotion_response(emotion_scores)
             print(f">- {slime_response}")
 
-        # 保存对话到日志
         self.save_conversation(user_text, slime_response)
 
-        # 更新意志力
+        # 文件覆写 - 意志力受情绪影响
         with open("attributes/data.json", "r", encoding="utf-8") as file:
             _Data = json.load(file)
-        _Data["will"] -= 1 - positive + negative
+
+        # 意志力变化：正面情绪减少意志力消耗，负面情绪增加消耗
+        will_change = -1
+        if emotion_scores["开心"] > 0.5:
+            will_change += 1  # 开心时减少消耗
+        if emotion_scores["生气"] > 0.5 or emotion_scores["伤心"] > 0.5:
+            will_change -= 1  # 负面情绪增加消耗
+
+        _Data["will"] += will_change
         if _Data["will"] < -50:
             _Data["will"] = -50
         if _Data["will"] > 100:
@@ -432,7 +403,6 @@ class Slime:
         with open("attributes/data.json", "w", encoding="utf-8") as file:
             json.dump(_Data, file, ensure_ascii=False, indent=4)
 
-        # 如果是退出命令，在这里退出
         if should_quit:
             today = datetime.datetime.now().strftime("%Y-%m-%d")
             log_file = f"memories/{today}.log"
@@ -443,37 +413,178 @@ class Slime:
 
             exit()
 
-        return list(user_text)
+        return list(user_text), emotion_scores  # 返回情绪值
 
+    def analyze_emotion_simple(self, user_text):
+        """简单的情绪分析"""
+        with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
+            _Vocab = json.load(file)
+
+        if "emotion_triggers" not in _Vocab["input"]:
+            # 如果没有配置情绪触发器，返回默认值
+            return {"开心": 0, "伤心": 0, "好奇": 0, "生气": 0, "害怕": 0, "惊讶": 0}
+
+        emotion_triggers = _Vocab["input"]["emotion_triggers"]
+        intensifiers_config = _Vocab["input"].get(
+            "intensifiers", {"words": [], "multiplier": 1.5}
+        )
+
+        emotion_scores = {
+            "开心": 0,
+            "伤心": 0,
+            "好奇": 0,
+            "生气": 0,
+            "害怕": 0,
+            "惊讶": 0,
+        }
+
+        # 检查强度修饰
+        has_intensifier = any(
+            word in user_text for word in intensifiers_config["words"]
+        )
+        intensity_multiplier = (
+            intensifiers_config["multiplier"] if has_intensifier else 1.0
+        )
+
+        # 分析每个情绪类别
+        for emotion, config in emotion_triggers.items():
+            base_intensity = config["base_intensity"]
+            for word in config["words"]:
+                if word in user_text:
+                    emotion_scores[emotion] += base_intensity * intensity_multiplier
+
+        # 限制范围
+        for emotion in emotion_scores:
+            emotion_scores[emotion] = min(1.0, emotion_scores[emotion])
+
+        return emotion_scores
+
+    def update_slime_emotions(self, emotion_scores):
+        """更新史莱姆情绪数据"""
+        with open("attributes/data.json", "r", encoding="utf-8") as file:
+            _Data = json.load(file)
+
+        current_emotions = _Data["emotions"]["data"]
+        emotion_names = _Data["emotions"]["name"]
+
+        # 确保情绪名称匹配
+        emotion_mapping = {
+            "开心": "开心",
+            "伤心": "伤心",
+            "好奇": "好奇",
+            "生气": "生气",
+            "害怕": "害怕",
+            "惊讶": "惊讶",
+        }
+
+        # 更新情绪值（新影响 + 旧情绪衰减）
+        for i, emotion_name in enumerate(emotion_names):
+            # 使用映射确保名称一致
+            mapped_name = emotion_mapping.get(emotion_name, emotion_name)
+            current_value = current_emotions[i]
+            impact = emotion_scores.get(mapped_name, 0)
+
+            # 新情绪影响 + 旧情绪自然衰减
+            new_value = current_value * 0.9 + impact * 0.3
+            current_emotions[i] = max(0, min(1.0, new_value))
+
+        # 保存更新
+        _Data["emotions"]["data"] = current_emotions
+        with open("attributes/data.json", "w", encoding="utf-8") as file:
+            json.dump(_Data, file, ensure_ascii=False, indent=4)
+
+    def generate_emotion_response(self, emotion_scores):
+        """根据情绪生成回应"""
+        # 找出主导情绪
+        dominant_emotion = max(emotion_scores.items(), key=lambda x: x[1])[0]
+        dominant_intensity = emotion_scores[dominant_emotion]
+
+        emotion_responses = {
+            "开心": [
+                "开心地晃动~",
+                "噗噜噗噜~",
+                "发出快乐的光芒",
+                "姆姆！好高兴",
+                "变成亮绿色~",
+                "咕啾咕啾~",
+            ],
+            "伤心": [
+                "缩成一团...",
+                "变成深蓝色",
+                "咕…不开心",
+                "发出低落的光芒",
+                "姆…有点难过",
+                "静静地待着",
+            ],
+            "好奇": [
+                "歪着头看着你",
+                "发出好奇的光芒",
+                "噗噜？",
+                "姆~？",
+                "轻轻晃动",
+                "好奇地靠近",
+            ],
+            "生气": [
+                "变成红色！",
+                "气鼓鼓地",
+                "发出不满的光芒",
+                "转过身去",
+                "哼！",
+                "不想理你",
+            ],
+            "害怕": [
+                "颤抖着",
+                "躲到角落",
+                "变成透明色",
+                "发出害怕的光芒",
+                "缩成一小团",
+                "咕...害怕",
+            ],
+            "惊讶": [
+                "突然跳起来",
+                "发出闪烁的光芒",
+                "哇！",
+                "睁大眼睛",
+                "噗叽！",
+                "被吓到了",
+            ],
+        }
+
+        if dominant_intensity > 0.3:
+            responses = emotion_responses.get(dominant_emotion, ["咕？"])
+            return random.choice(responses)
+        else:
+            # 情绪不明显时的默认回应
+            neutral_responses = ["咕？", "轻轻晃动", "发出微弱的光芒", "噗噜~"]
+            return random.choice(neutral_responses)
+
+    # 用法·矩阵运算
     def matrix_operation(self, M, intensity=0.1):
         with open("attributes/data.json", "r", encoding="utf-8") as file:
             _Data = json.load(file)
 
-        matrix_M = np.array(_Data["attributes"]).reshape(6, 1)
+        matrix_M = np.array(_Data["emotions"]["data"]).reshape(6, 1)
         matrix_X = np.array(M)
 
         change = np.dot(matrix_X, matrix_M) - matrix_M
         matrix_M_ = matrix_M + intensity * change
-        
+
         matrix_M_ = np.clip(matrix_M_, 0, 1)
-        _Data["attributes"] = matrix_M_.flatten().tolist()
+        _Data["emotions"]["data"] = matrix_M_.flatten().tolist()
 
         with open("attributes/data.json", "w", encoding="utf-8") as file:
             json.dump(_Data, file, ensure_ascii=False, indent=4)
 
         return matrix_M_
 
+    # 用法·保存对话
     def save_conversation(self, user_text, slime_response):
-        """保存对话到日志文件"""
-        # 获取当前日期
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         log_file = f"memories/{today}.log"
 
-        # 确保memories文件夹存在
         if not os.path.exists("memories"):
             os.makedirs("memories")
 
-        # 写入对话
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
         log_entry = f"[{timestamp}] >: {user_text}\n[{timestamp}] {slime_response}\n"
 
@@ -490,227 +601,11 @@ if pet.Check_integrity():
     log_entry = f"\n[{timestamp}] $Start_chat()\n"
     with open(log_file, "a", encoding="utf-8") as file:
         file.write(log_entry)
+    with open("attributes/data.json", "r", encoding="utf-8") as file:
+        _Data = json.load(file)
+        _Data["will"] = 50
+        _Data["emotions"]["data"] = _Data["emotions"]["default"]
+    with open("attributes/data.json", "w", encoding="utf-8") as file:
+        json.dump(_Data, file, ensure_ascii=False, indent=4)
 
     pet.Start_chat()
-
-
-
-class SlimeMatrixLab:
-    def __init__(self):
-        # 预定义史莱姆状态向量 (8维)
-        self.slime_state = np.array([0.8, 0.6, 0.3, 0.9, 0.2, 0.7, 0.4, 0.5])
-        self.state_names = [
-            "能量",
-            "心情",
-            "饥饿",
-            "亲密度",
-            "好奇心",
-            "活跃度",
-            "学习力",
-            "社交需求",
-        ]
-
-    def show_slime_state(self):
-        """显示当前史莱姆状态"""
-        print("\n=== 当前史莱姆状态 ===")
-        for i, (name, value) in enumerate(zip(self.state_names, self.slime_state)):
-            print(f"{i+1}. {name}: {value:.2f}")
-
-    def create_behavior_matrix(self):
-        """创建行为影响矩阵"""
-        print("\n=== 创建行为影响矩阵 ===")
-        print(
-            "矩阵将影响: [能量, 心情, 饥饿, 亲密度, 好奇心, 活跃度, 学习力, 社交需求]"
-        )
-
-        matrix = []
-        for i, target_attr in enumerate(self.state_names):
-            row = []
-            print(f"\n设置对 [{target_attr}] 的影响:")
-            for j, source_attr in enumerate(self.state_names):
-                try:
-                    effect = float(input(f"  {source_attr} 的影响系数: "))
-                    row.append(effect)
-                except ValueError:
-                    print("  使用默认值 0.0")
-                    row.append(0.0)
-            matrix.append(row)
-
-        return np.array(matrix)
-
-    def apply_behavior(self):
-        """应用行为矩阵"""
-        print("\n=== 应用行为影响 ===")
-        matrix = self.create_behavior_matrix()
-
-        print(f"\n行为矩阵:")
-        print(matrix)
-
-        # 计算新状态
-        new_state = np.dot(matrix, self.slime_state)
-        new_state = np.clip(new_state, 0, 1)  # 限制在0-1范围
-
-        print(f"\n应用前状态: {self.slime_state}")
-        print(f"应用后状态: {new_state}")
-
-        # 显示变化
-        print("\n状态变化:")
-        for i, (name, old, new) in enumerate(
-            zip(self.state_names, self.slime_state, new_state)
-        ):
-            change = new - old
-            print(f"{name}: {old:.2f} → {new:.2f} ({change:+.2f})")
-
-        self.slime_state = new_state
-
-    def test_feeding_behavior(self):
-        """测试喂食行为"""
-        print("\n=== 测试喂食行为 ===")
-        # 喂食行为的影响矩阵
-        feeding_matrix = np.array(
-            [
-                [1.2, 0.1, -0.5, 0.1, 0.0, 0.1, 0.0, 0.1],
-                [0.1, 1.1, -0.3, 0.2, 0.1, 0.2, 0.0, 0.1],
-                [0.0, 0.2, 0.8, 0.1, 0.1, 0.0, 0.1, 0.1],
-                [0.1, 0.1, 0.1, 1.1, 0.0, 0.1, 0.0, 0.2],
-                [0.0, 0.1, 0.0, 0.0, 1.0, 0.1, 0.1, 0.0],
-                [0.1, 0.2, 0.0, 0.1, 0.1, 1.1, 0.0, 0.1],
-                [0.0, 0.0, 0.1, 0.0, 0.2, 0.0, 1.0, 0.0],
-                [0.1, 0.1, 0.0, 0.2, 0.0, 0.1, 0.0, 1.1],
-            ]
-        )
-
-        old_state = self.slime_state.copy()
-        new_state = np.dot(feeding_matrix, old_state)
-        new_state = np.clip(new_state, 0, 1)
-
-        print("喂食后的状态变化:")
-        for i, (name, old, new) in enumerate(
-            zip(self.state_names, old_state, new_state)
-        ):
-            change = new - old
-            print(f"{name}: {old:.2f} → {new:.2f} ({change:+.2f})")
-
-        self.slime_state = new_state
-
-    def run(self):
-        """运行实验室"""
-        print("🧪 史莱姆矩阵实验室")
-        print("=" * 30)
-
-        while True:
-            self.show_slime_state()
-            print("\n选择操作:")
-            print("1. 创建行为矩阵")
-            print("2. 应用行为影响")
-            print("3. 测试喂食行为")
-            print("4. 重置史莱姆状态")
-            print("0. 退出")
-
-            choice = input("请输入选择: ").strip()
-
-            if choice == "1":
-                matrix = self.create_behavior_matrix()
-                print("创建的行为矩阵:")
-                print(matrix)
-            elif choice == "2":
-                self.apply_behavior()
-            elif choice == "3":
-                self.test_feeding_behavior()
-            elif choice == "4":
-                self.slime_state = np.array([0.8, 0.6, 0.3, 0.9, 0.2, 0.7, 0.4, 0.5])
-                print("状态已重置")
-            elif choice == "0":
-                print("实验室关闭！")
-                break
-            else:
-                print("无效选择")
-
-
-# 运行实验室
-if __name__ == "__main__":
-    lab = SlimeMatrixLab()
-    # lab.run()
-
-
-"""
-    def __init__(self):
-        self.gui = tk.Tk()
-        self.gui.overrideredirect(True)
-        self.gui.attributes("-alpha", 0.8)
-        self.gui.attributes("-topmost", True)
-        self.gui.attributes("-transparentcolor", "white")
-        try:
-            with open("gui/gui.json", "r", encoding="utf-8") as file:
-                size_of_gui = json.load(file)
-            x = size_of_gui["initial_pos"][0]
-            y = size_of_gui["initial_pos"][1]
-            self.size = size_of_gui["initial_size"]
-            self.gui.geometry(f"{self.size}x{self.size}+{x}+{y}")
-        except FileNotFoundError:
-            print("gui.json文件不存在！")
-            return 0
-        except Exception as e:
-            print(f"读取配置文件出错: {e}")
-            return 0
-
-        try:
-            from PIL import Image, ImageTk
-
-            image = Image.open("gui/slime.png")
-            image = image.resize((self.size, self.size), Image.Resampling.LANCZOS)
-            self.photo = ImageTk.PhotoImage(image)
-            self.original_image = image
-
-            self.label = tk.Label(self.gui, image=self.photo, bg="white")
-            self.label.pack()
-
-        except Exception as e:
-            print(f"加载图片失败: {e}")
-
-        self.load_animation_settings()  # 加载动画设置
-        self.start_idle_animation()  # 开始动画
-
-        self.gui.bind("<Escape>", self.quit)
-
-    def load_animation_settings(self):
-        #加载动画设置
-        try:
-            with open("gui/gui.json", "r", encoding="utf-8") as file:
-                animation_data = json.load(file)
-
-            animation_config = animation_data["animation"]
-            self.swing_range = animation_config["swing_range"]  # 修正键名
-            self.animation_speed = animation_config["speed"]
-            self.animation_phase = animation_config["phase"]  # 初始化相位
-
-        except Exception as e:
-            print(f"加载动画设置失败: {e}")
-            # 默认值
-            self.swing_range = 10
-            self.animation_speed = 0.2
-            self.animation_phase = 0
-
-    def start_idle_animation(self):
-        self.animate_swing()
-
-    def animate_swing(self):
-        #print(f"动画执行中... 相位: {self.animation_phase}, 幅度: {self.swing_range}")  # 调试
-
-        if hasattr(self, "original_image"):
-            swing_offset = int(math.sin(self.animation_phase) * self.swing_range)
-
-            new_x = self.gui.winfo_x() + swing_offset
-            current_y = self.gui.winfo_y()
-
-            self.gui.geometry(f"{self.size}x{self.size}+{new_x}+{current_y}")
-
-            self.animation_phase += self.animation_speed
-
-            self.gui.after(50, self.animate_swing)
-    def quit(self, event=None):
-        self.gui.quit()
-
-    def run(self):
-            self.gui.mainloop()
-"""
