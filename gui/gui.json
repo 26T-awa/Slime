@@ -1,0 +1,12 @@
+{
+    "initial_pos": [
+        1580,
+        905
+    ],
+    "initial_size": 128,
+    "animation": {
+        "phase": 0,
+        "speed": 0.2,
+        "swing_range": 10
+    }
+}
