@@ -51,13 +51,7 @@ class Slime:
             if not user_text.strip():
                 print("咕？")
                 continue
-
-            # 现在 analyse_user_input 返回两个值
-            user_chars, emotion_matrix = self.analyse_user_input(user_text)
-
-            # 可选：显示情绪矩阵（调试用）
-            if any(value > 0 for value in emotion_matrix.values()):
-                print(f"   情绪变化: {emotion_matrix}")
+            self.analyse_user_input(user_text)
 
     # 用法·打招呼
     def Meet(self, user_text=""):
@@ -317,18 +311,76 @@ class Slime:
 
         return output
 
+    def analyse_emotion(self):
+        # 读取文件
+        with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
+            _Vocab = json.load(file)
+        with open("attributes/data.json", "r", encoding="utf-8") as file:
+            _Data = json.load(file)
+        _Input = _Vocab["input"]
+        emotion_possibilities = _Data["emotions"]["data"]
+        # 分析
+        count = 0
+        while count < 20:
+            count += 1
+            # 开心 伤心 好奇 愤怒 害怕 惊讶
+            if count != 1:
+                for i in range(0,5):
+                    emotion_possibilities[i] *= 0.6
+            user_text = input()
+            emotion_types = [
+                "happiness",
+                "sadness",
+                "curiosity",
+                "anger",
+                "fear",
+                "surprise",
+            ]
+            emotion_typecount = 0
+
+            for emotion_typecount in range(0, 5):
+                c = 0
+                m = 1
+                words = _Input[emotion_types[emotion_typecount]]["words"]
+                coiiu = 0
+                for word in words:
+                    coiiu += 1
+                    if word in user_text:
+                        if emotion_typecount == 1 or 4:
+                            emotion_possibilities[0] *= 0.8
+
+                        if emotion_typecount == 0:
+                            emotion_possibilities[1] *= 0.85
+                            emotion_possibilities[4] *= 0.85
+
+                        c += _Input[emotion_types[emotion_typecount]][word] ** max(
+                            1 / math.sqrt(coiiu), 0.3
+                        )
+
+                words = _Input["intensifiers"]["words"]
+                for word in words:
+                    if word in user_text:
+                        m *= _Input["intensifiers"][word]
+
+                emotion_possibilities[emotion_typecount] += c * m
+                emotion_typecount += 1
+
+            for i in range(0, 5):
+                if emotion_possibilities[i] > 1:
+                    for j in range(0, 5):
+                        if i != j:
+                            emotion_possibilities[j] /= emotion_possibilities[i]
+                    emotion_possibilities[i] = 1
+            for i in range(0, 5):
+                emotion_possibilities[i] = round(emotion_possibilities[i], 3)
+            print(f"{emotion_possibilities}")
+
     # 用法·分析对话
     def analyse_user_input(self, user_text):
         # 读取文件
         with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
             _Vocab = json.load(file)
         _Input = _Vocab["input"]
-
-        # 分析情绪
-        emotion_scores = self.analyze_emotion_simple(user_text)
-
-        # 更新史莱姆情绪数据
-        self.update_slime_emotions(emotion_scores)
 
         # 分析
         slime_response = ""
@@ -376,23 +428,14 @@ class Slime:
 
             if responses:
                 slime_response = " ".join(responses)
-        else:
-            # 没有触发动作时，根据情绪生成回应
-            slime_response = self.generate_emotion_response(emotion_scores)
-            print(f">- {slime_response}")
 
         self.save_conversation(user_text, slime_response)
 
-        # 文件覆写 - 意志力受情绪影响
+        # 文件覆写
         with open("attributes/data.json", "r", encoding="utf-8") as file:
             _Data = json.load(file)
 
-        # 意志力变化：正面情绪减少意志力消耗，负面情绪增加消耗
         will_change = -1
-        if emotion_scores["开心"] > 0.5:
-            will_change += 1  # 开心时减少消耗
-        if emotion_scores["生气"] > 0.5 or emotion_scores["伤心"] > 0.5:
-            will_change -= 1  # 负面情绪增加消耗
 
         _Data["will"] += will_change
         if _Data["will"] < -50:
@@ -413,150 +456,7 @@ class Slime:
 
             exit()
 
-        return list(user_text), emotion_scores  # 返回情绪值
-
-    def analyze_emotion_simple(self, user_text):
-        """简单的情绪分析"""
-        with open("attributes/vocabularies.json", "r", encoding="utf-8") as file:
-            _Vocab = json.load(file)
-
-        if "emotion_triggers" not in _Vocab["input"]:
-            # 如果没有配置情绪触发器，返回默认值
-            return {"开心": 0, "伤心": 0, "好奇": 0, "生气": 0, "害怕": 0, "惊讶": 0}
-
-        emotion_triggers = _Vocab["input"]["emotion_triggers"]
-        intensifiers_config = _Vocab["input"].get(
-            "intensifiers", {"words": [], "multiplier": 1.5}
-        )
-
-        emotion_scores = {
-            "开心": 0,
-            "伤心": 0,
-            "好奇": 0,
-            "生气": 0,
-            "害怕": 0,
-            "惊讶": 0,
-        }
-
-        # 检查强度修饰
-        has_intensifier = any(
-            word in user_text for word in intensifiers_config["words"]
-        )
-        intensity_multiplier = (
-            intensifiers_config["multiplier"] if has_intensifier else 1.0
-        )
-
-        # 分析每个情绪类别
-        for emotion, config in emotion_triggers.items():
-            base_intensity = config["base_intensity"]
-            for word in config["words"]:
-                if word in user_text:
-                    emotion_scores[emotion] += base_intensity * intensity_multiplier
-
-        # 限制范围
-        for emotion in emotion_scores:
-            emotion_scores[emotion] = min(1.0, emotion_scores[emotion])
-
-        return emotion_scores
-
-    def update_slime_emotions(self, emotion_scores):
-        """更新史莱姆情绪数据"""
-        with open("attributes/data.json", "r", encoding="utf-8") as file:
-            _Data = json.load(file)
-
-        current_emotions = _Data["emotions"]["data"]
-        emotion_names = _Data["emotions"]["name"]
-
-        # 确保情绪名称匹配
-        emotion_mapping = {
-            "开心": "开心",
-            "伤心": "伤心",
-            "好奇": "好奇",
-            "生气": "生气",
-            "害怕": "害怕",
-            "惊讶": "惊讶",
-        }
-
-        # 更新情绪值（新影响 + 旧情绪衰减）
-        for i, emotion_name in enumerate(emotion_names):
-            # 使用映射确保名称一致
-            mapped_name = emotion_mapping.get(emotion_name, emotion_name)
-            current_value = current_emotions[i]
-            impact = emotion_scores.get(mapped_name, 0)
-
-            # 新情绪影响 + 旧情绪自然衰减
-            new_value = current_value * 0.9 + impact * 0.3
-            current_emotions[i] = max(0, min(1.0, new_value))
-
-        # 保存更新
-        _Data["emotions"]["data"] = current_emotions
-        with open("attributes/data.json", "w", encoding="utf-8") as file:
-            json.dump(_Data, file, ensure_ascii=False, indent=4)
-
-    def generate_emotion_response(self, emotion_scores):
-        """根据情绪生成回应"""
-        # 找出主导情绪
-        dominant_emotion = max(emotion_scores.items(), key=lambda x: x[1])[0]
-        dominant_intensity = emotion_scores[dominant_emotion]
-
-        emotion_responses = {
-            "开心": [
-                "开心地晃动~",
-                "噗噜噗噜~",
-                "发出快乐的光芒",
-                "姆姆！好高兴",
-                "变成亮绿色~",
-                "咕啾咕啾~",
-            ],
-            "伤心": [
-                "缩成一团...",
-                "变成深蓝色",
-                "咕…不开心",
-                "发出低落的光芒",
-                "姆…有点难过",
-                "静静地待着",
-            ],
-            "好奇": [
-                "歪着头看着你",
-                "发出好奇的光芒",
-                "噗噜？",
-                "姆~？",
-                "轻轻晃动",
-                "好奇地靠近",
-            ],
-            "生气": [
-                "变成红色！",
-                "气鼓鼓地",
-                "发出不满的光芒",
-                "转过身去",
-                "哼！",
-                "不想理你",
-            ],
-            "害怕": [
-                "颤抖着",
-                "躲到角落",
-                "变成透明色",
-                "发出害怕的光芒",
-                "缩成一小团",
-                "咕...害怕",
-            ],
-            "惊讶": [
-                "突然跳起来",
-                "发出闪烁的光芒",
-                "哇！",
-                "睁大眼睛",
-                "噗叽！",
-                "被吓到了",
-            ],
-        }
-
-        if dominant_intensity > 0.3:
-            responses = emotion_responses.get(dominant_emotion, ["咕？"])
-            return random.choice(responses)
-        else:
-            # 情绪不明显时的默认回应
-            neutral_responses = ["咕？", "轻轻晃动", "发出微弱的光芒", "噗噜~"]
-            return random.choice(neutral_responses)
+        return list(user_text)
 
     # 用法·矩阵运算
     def matrix_operation(self, M, intensity=0.1):
@@ -593,6 +493,7 @@ class Slime:
 
 
 pet = Slime()
+"""
 print(">- 史莱姆正在检查文件完整性. . .")
 if pet.Check_integrity():
     today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -609,3 +510,29 @@ if pet.Check_integrity():
         json.dump(_Data, file, ensure_ascii=False, indent=4)
 
     pet.Start_chat()
+"""
+pet.analyse_emotion()
+
+
+"""
+"我恨死这个人了，他毁了我的一切！"
+"天啊！这简直太不可思议了！"
+"救命啊！有怪物在追我！"
+"虽然分手很伤心，但也为彼此感到解脱"
+"这个谜题既让我困惑又让我着迷"
+"听到这个消息，我又惊又喜又有点担心"
+"雨声让人感到莫名的安宁"
+"独自在深夜，有些孤独但也很自在"
+"看着夕阳，心里有种说不出的惆怅"
+"我该高兴还是难过？这个选择太艰难了"
+"既期待又害怕明天的到来"
+"对他又爱又恨，心情很复杂"
+"迷路在陌生的城市，既害怕又觉得刺激"
+"收到意外的礼物，惊喜中带着困惑"
+"比赛输了，失望但为对手感到高兴"
+"稍微有点不开心"
+"我简直气疯了！"
+"隐隐约约感到不安"
+"这种意境让人心生向往"
+"看到这一幕，不禁感慨万千"
+"""
