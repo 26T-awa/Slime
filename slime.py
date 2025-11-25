@@ -325,7 +325,7 @@ class Slime:
             count += 1
             # 开心 伤心 好奇 愤怒 害怕 惊讶
             if count != 1:
-                for i in range(0,5):
+                for i in range(0, 6):
                     emotion_possibilities[i] *= 0.6
             user_text = input()
             emotion_types = [
@@ -338,7 +338,7 @@ class Slime:
             ]
             emotion_typecount = 0
 
-            for emotion_typecount in range(0, 5):
+            for emotion_typecount in range(0, 6):
                 c = 0
                 m = 1
                 words = _Input[emotion_types[emotion_typecount]]["words"]
@@ -346,15 +346,26 @@ class Slime:
                 for word in words:
                     coiiu += 1
                     if word in user_text:
-                        if emotion_typecount == 1 or 4:
-                            emotion_possibilities[0] *= 0.8
+                        if (
+                            emotion_typecount == 1
+                            or emotion_typecount == 4
+                            or emotion_typecount == 5
+                        ) and (
+                            emotion_possibilities[1] > 0.5 * emotion_possibilities[0]
+                            or emotion_possibilities[4] > 0.5 * emotion_possibilities[0]
+                            or emotion_possibilities[5] > 0.6 * emotion_possibilities[0]
+                        ):
+                            emotion_possibilities[0] *= 0.85
 
-                        if emotion_typecount == 0:
-                            emotion_possibilities[1] *= 0.85
-                            emotion_possibilities[4] *= 0.85
+                        if (emotion_typecount == 0) and (
+                            emotion_possibilities[0] > 0.5 * emotion_possibilities[1]
+                            or emotion_possibilities[0] > 0.5 * emotion_possibilities[4]
+                        ):
+                            emotion_possibilities[1] *= 0.87
+                            emotion_possibilities[4] *= 0.88
 
                         c += _Input[emotion_types[emotion_typecount]][word] ** max(
-                            1 / math.sqrt(coiiu), 0.3
+                            1 / math.sqrt(coiiu), 0.32
                         )
 
                 words = _Input["intensifiers"]["words"]
@@ -363,15 +374,20 @@ class Slime:
                         m *= _Input["intensifiers"][word]
 
                 emotion_possibilities[emotion_typecount] += c * m
-                emotion_typecount += 1
 
-            for i in range(0, 5):
+            if (
+                emotion_possibilities[0] / emotion_possibilities[1] > 0.9
+                and emotion_possibilities[0] / emotion_possibilities[1] < 1.1
+            ):
+                emotion_possibilities[2] *= 3.79
+
+            for i in range(0, 6):
                 if emotion_possibilities[i] > 1:
-                    for j in range(0, 5):
+                    for j in range(0, 6):
                         if i != j:
                             emotion_possibilities[j] /= emotion_possibilities[i]
                     emotion_possibilities[i] = 1
-            for i in range(0, 5):
+            for i in range(0, 6):
                 emotion_possibilities[i] = round(emotion_possibilities[i], 3)
             print(f"{emotion_possibilities}")
 
